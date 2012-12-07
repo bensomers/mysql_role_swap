@@ -85,11 +85,8 @@ MASTER_IPMI_ADDRESS = CONFIG['master_ipmi_address']
 
 ActiveRecord::Base.configurations = CONFIG
 
-class DatabaseOne < ActiveRecord::Base
-
-  def self.database
-    "database_one"
-  end
+class DatabaseServer < ActiveRecord::Base
+  def self.database; raise "IMPLEMENT THIS IN A SUBCLASS"; end
 
   establish_connection(self.database)
 
@@ -98,225 +95,116 @@ class DatabaseOne < ActiveRecord::Base
   end
 
   def self.role
-   if self.mysql_rep_role == "master" && self.ip_role == "master"
-    "master"
-  else
-    "slave"
-   end
- end
-
- def self.mysql_rep_role
-   if self.connection.execute("SHOW SLAVE STATUS").fetch_hash.nil?
-    "master"
-  else
-    "slave"
-   end
- end
-
- def self.ip_role
-   `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr | grep #{FLOATING_IP}#{FLOATING_IP_CIDR}'`
-   if $?.exitstatus == 0
-    "master"
-  else
-    "slave"
-   end
- end
-
- def self.add_vip
-   if self.config['host'] == `hostname`.chomp
-     `sudo /sbin/ip addr add #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0`
+    if self.mysql_rep_role == "master" && self.ip_role == "master"
+      "master"
     else
-     `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr add #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0'`
-   end
-   if $?.exitstatus == 0
-    true
-  else
-    false
-   end
- end
+      "slave"
+    end
+  end
 
- def self.remove_vip
-   if self.config['host'] == `hostname`.chomp
-     `sudo /sbin/ip addr del #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0`
-   else
-     `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr del #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0'`
-   end
-   if $?.exitstatus == 0
-    true
-  else
-    false
-   end
- end
+  def self.mysql_rep_role
+    if self.connection.execute("SHOW SLAVE STATUS").fetch_hash.nil?
+      "master"
+    else
+      "slave"
+    end
+  end
 
- def self.arping_path
-   `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/arping -V 2> /dev/null'`
-   if $?.exitstatus == 0
-     return "/sbin/arping"
-   end
-   `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /usr/bin/arping -V 2> /dev/null'`
-   if $?.exitstatus == 0
-     return "/usr/bin/arping"
-   end
- end
+  def self.ip_role
+    `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr | grep #{FLOATING_IP}#{FLOATING_IP_CIDR}'`
+    if $?.exitstatus == 0
+      "master"
+    else
+      "slave"
+    end
+  end
 
- def self.arping
-   if self.config['host'] == `hostname`.chomp
-     `sudo #{self.arping_path} -U -c 4 -I bond0 #{FLOATING_IP}`
-   else
-     `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo #{self.arping_path} -U -c 4 -I bond0 #{FLOATING_IP}'`
-   end
-   if $?.exitstatus == 0
-    true
-  else
-    false
-   end
- end
-
- def self.database?
-   unless self.connection.execute("SHOW DATABASES LIKE '#{self.config['primary_database']}'").fetch_hash.nil?
-     true
-   else
-     false
-   end
- end
-
-  def self.read_only?
-   if self.connection.execute("SHOW GLOBAL VARIABLES LIKE 'read_only';").fetch_hash["Value"] == "ON"
+  def self.add_vip
+    if self.config['host'] == `hostname`.chomp
+      `sudo /sbin/ip addr add #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0`
+    else
+      `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr add #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0'`
+    end
+    if $?.exitstatus == 0
       true
     else
       false
-   end
- end
+    end
+  end
 
- def self.version
+  def self.remove_vip
+    if self.config['host'] == `hostname`.chomp
+      `sudo /sbin/ip addr del #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0`
+    else
+      `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr del #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0'`
+    end
+    if $?.exitstatus == 0
+      true
+    else
+      false
+    end
+  end
+
+  def self.arping_path
+    `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/arping -V 2> /dev/null'`
+    if $?.exitstatus == 0
+      return "/sbin/arping"
+    end
+    `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /usr/bin/arping -V 2> /dev/null'`
+    if $?.exitstatus == 0
+      return "/usr/bin/arping"
+    end
+  end
+
+  
+  def self.arping
+    if self.config['host'] == `hostname`.chomp
+      `sudo #{self.arping_path} -U -c 4 -I bond0 #{FLOATING_IP}`
+    else
+      `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo #{self.arping_path} -U -c 4 -I bond0 #{FLOATING_IP}'`
+    end
+    if $?.exitstatus == 0
+      true
+    else
+      false
+    end
+  end
+
+  def self.database?
+    unless self.connection.execute("SHOW DATABASES LIKE '#{self.config['primary_database']}'").fetch_hash.nil?
+      true
+    else
+      false
+    end
+  end
+
+  def self.read_only?
+    if self.connection.execute("SHOW GLOBAL VARIABLES LIKE 'read_only';").fetch_hash["Value"] == "ON"
+      true
+    else
+      false
+    end
+  end
+
+  def self.version
     self.connection.execute("SELECT version();").fetch_hash["version()"]
- end
+  end
 
- def self.max_connections
+  def self.max_connections
     self.connection.execute("SHOW GLOBAL VARIABLES LIKE 'max_connections';").fetch_hash["Value"]
- end
+  end
 
- def self.hostname
+  def self.hostname
     `host #{self.config['host']}`.split(" ").last.gsub(/.\Z/, "").split(".").first
   end
- 
 end
 
-class DatabaseTwo < ActiveRecord::Base
+class DatabaseOne < DatabaseServer
+  def self.database; "database_one"; end
+end
 
-  def self.database
-    "database_two"
-  end
-
-  establish_connection(self.database)
-
-  def self.config
-    CONFIG[database]
-  end
-
-  def self.role
-   if self.mysql_rep_role == "master" && self.ip_role == "master"
-    "master"
-  else
-    "slave"
-   end
- end
-
- def self.mysql_rep_role
-   if self.connection.execute("SHOW SLAVE STATUS").fetch_hash.nil?
-    "master"
-  else
-    "slave"
-   end
- end
-
- def self.ip_role
-   `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr | grep -q #{FLOATING_IP}#{FLOATING_IP_CIDR}'`
-   if $?.exitstatus == 0
-    "master"
-  else
-    "slave"
-   end
- end
-
- def self.add_vip
-   if self.config['host'] == `hostname`.chomp
-     `sudo /sbin/ip addr add #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0`
-    else
-     `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr add #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0'`
-   end
-   if $?.exitstatus == 0
-    true
-  else
-    false
-   end
- end
-
- def self.remove_vip
-   if self.config['host'] == `hostname`.chomp
-     `sudo /sbin/ip addr del #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0`
-   else
-     `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/ip addr del #{FLOATING_IP}#{FLOATING_IP_CIDR} dev bond0'`
-   end
-   if $?.exitstatus == 0
-    true
-  else
-    false
-   end
- end
-
- def self.arping_path
-   `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /sbin/arping -V 2> /dev/null'`
-   if $?.exitstatus == 0
-     return "/sbin/arping"
-   end
-   `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo /usr/bin/arping -V 2> /dev/null'`
-   if $?.exitstatus == 0
-     return "/usr/bin/arping"
-   end
- end
-
- def self.arping
-   if self.config['host'] == `hostname`.chomp
-     `sudo #{self.arping_path} -U -c 4 -I bond0 #{FLOATING_IP}`
-   else
-     `ssh app@#{self.config['host']} -i /local/app/.ssh/id_rsa 'sudo #{self.arping_path} -U -c 4 -I bond0 #{FLOATING_IP}'`
-   end
-   if $?.exitstatus == 0
-    true
-  else
-    false
-   end
- end
-
- def self.database?
-   unless self.connection.execute("SHOW DATABASES LIKE '#{self.config['primary_database']}'").fetch_hash.nil?
-     true
-   else
-     false
-   end
- end
-
-  def self.read_only?
-   if self.connection.execute("SHOW GLOBAL VARIABLES LIKE 'read_only';").fetch_hash["Value"] == "ON"
-      true
-    else
-      false
-   end
- end
-
- def self.version
-    self.connection.execute("SELECT version();").fetch_hash["version()"]
- end
-
- def self.max_connections
-    self.connection.execute("SHOW GLOBAL VARIABLES LIKE 'max_connections';").fetch_hash["Value"]
- end
-
- def self.hostname
-    `host #{self.config['host']}`.split(" ").last.gsub(/.\Z/, "").split(".").first
-  end
-
+class DatabaseTwo < DatabaseServer
+  def self.database; "database_two"; end
 end
 
 class MysqlSwitchRoleContext
